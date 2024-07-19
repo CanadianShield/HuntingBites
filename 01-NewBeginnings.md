@@ -115,6 +115,7 @@ SigninLogs
 ``` 
 
 🔗 [geo_point_to_s2cell documentation](https://learn.microsoft.com/en-us/azure/data-explorer/kusto/query/geo-point-to-s2cell-function)
+
 Now let's use it.
 
 ```kql
@@ -129,6 +130,7 @@ SigninLogs
 | distinct UserPrincipalName,Geohash
 | join kind=rightanti (
     SigninLogs
+    | where TimeGenerated > ago(1d)
     | extend Latitude = toreal(LocationDetails.geoCoordinates.latitude)
     | extend Longitude = toreal(LocationDetails.geoCoordinates.longitude)
     | extend Geohash = geo_point_to_s2cell(Longitude, Latitude, 6)
@@ -157,6 +159,42 @@ SigninLogs
 | distinct UserPrincipalName,Geohash
 | join kind=rightanti (
     SigninLogs
+    | where TimeGenerated > ago(1d)
+    | extend Latitude = toreal(LocationDetails.geoCoordinates.latitude)
+    | extend Longitude = toreal(LocationDetails.geoCoordinates.longitude)
+    | extend Geohash = geo_point_to_s2cell(Longitude, Latitude, 6)
+    | extend Place = strcat(LocationDetails.city,", ",LocationDetails.state, ", ", LocationDetails.countryOrRegion)
+    | where TimeGenerated > ago(1d)
+) on UserPrincipalName, Geohash
+| lookup UserList on $left.UserPrincipalName == $right.AccountUPN
+| where CreationTime < ago(1d)
+| lookup KnownPlaces on UserPrincipalName
+| extend Places = iif( isempty(Places), "💤", Places)
+| distinct UserPrincipalName, Geohash, KnownPlaces=tostring(Places), Place
+```
+
+All that was for all connectiona attempts... Which can be misleading. So let's focus on only successful signins:
+
+```kql
+let UserList = IdentityInfo
+| where TimeGenerated > ago(14d)
+| summarize CreationTime = max(AccountCreationTime) by AccountUPN  ;
+let KnownPlaces = SigninLogs
+| where TimeGenerated between (ago(90d)..ago(1d))
+| where ResultType == 0
+| extend Place = strcat(LocationDetails.city,", ",LocationDetails.state, ", ", LocationDetails.countryOrRegion)
+| summarize Places = make_set(Place) by UserPrincipalName ;
+SigninLogs
+| where TimeGenerated between (ago(90d)..ago(1d))
+| where ResultType == 0
+| extend Latitude = toreal(LocationDetails.geoCoordinates.latitude)
+| extend Longitude = toreal(LocationDetails.geoCoordinates.longitude)
+| extend Geohash = geo_point_to_s2cell(Longitude, Latitude, 6)
+| distinct UserPrincipalName,Geohash
+| join kind=rightanti (
+    SigninLogs
+    | where TimeGenerated > ago(1d)
+    | where ResultType == 0
     | extend Latitude = toreal(LocationDetails.geoCoordinates.latitude)
     | extend Longitude = toreal(LocationDetails.geoCoordinates.longitude)
     | extend Geohash = geo_point_to_s2cell(Longitude, Latitude, 6)
