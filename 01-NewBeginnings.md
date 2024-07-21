@@ -1,4 +1,5 @@
 **❓ Hypothesis** compromised users might connect from IP addresses we’ve never seen before.
+
 **📃 To-do**: 
   - Dig into the data to see if we have IP addresses that we never seen before
   - Try to determine if that’s just a new IP used by the user looking at geography   
