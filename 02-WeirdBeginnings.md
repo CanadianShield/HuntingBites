@@ -22,7 +22,7 @@ SecurityEvent
 | take 10
 ```
 
-Exploring that data we can see that many processes are created in the context of the machine. While it could be interresting for some threat detection, in our case proces created by the this actor will be in the context of a user. So we can filter out many process creation with the following:
+Exploring that data we can see that many processes are created in the context of the machine. While it could be interresting for some threat detection scenarios, in our case process created by this actor will be assumed to be in the context of a user. So we can filter out many process creation with the following:
 
 ```kql
 SecurityEvent
@@ -30,3 +30,30 @@ SecurityEvent
 | where EventID == 4688
 | where AccountType != "Machine"
 ```
+
+Let's see if we have the LOL processs in our dataset:
+
+```kql
+let LOLList = dynamic(["ipconfig.exe","whoami.exe","winrs.exe"]);
+SecurityEvent
+| where TimeGenerated > ago(1d)
+| where EventID == 4688
+| where AccountType != "Machine"
+| where Process in (LOLList)
+```
+
+Of course this only gives us if the prcesses where used. Not that there were used within 1 minute. For that we will need to bundle them in bucket of 1 minute.
+
+```kql
+let LOLList = dynamic(["ipconfig.exe","whoami.exe","winrs.exe"]);
+SecurityEvent
+| where TimeGenerated > ago(1d)
+| where EventID == 4688
+| where AccountType != "Machine"
+| where Process in~ (LOLList)
+| summarize ProcessSet = make_set(tolower(Process)) by bin(TimeGenerated, 1m), Computer, SubjectAccount
+```
+
+Now we can ask for buckets of ProcesSet that matches our variable `LOLList`.
+
+The problem with that approach is that it doesn't really tell us what we have
