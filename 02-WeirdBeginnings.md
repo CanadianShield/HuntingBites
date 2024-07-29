@@ -118,4 +118,58 @@ SecurityEvent
 | project TimeGenerated, Computer, SubjectAccount, NewProcessSet
 ```
 
-We are getting somewhere. But wouldn't be a more elegant way of doing that? Plenty! Like using [scan](https://learn.microsoft.com/en-us/azure/data-explorer/kusto/query/scan-operator) or (row_window_session%29))[https://learn.microsoft.com/en-us/azure/data-explorer/kusto/query/row-window-session-function]
+We are getting somewhere. But wouldn't be a more elegant way of doing that? Plenty! Like using [scan](https://learn.microsoft.com/en-us/azure/data-explorer/kusto/query/scan-operator) or (row_window_session)[https://learn.microsoft.com/en-us/azure/data-explorer/kusto/query/row-window-session-function] (which is kinda what we have done, but in a native and much shorter way). But we'll explore that in a another episode...
+
+Now, we need something else here. We didn't really need those processes to be 1 minute apart of each other. They needed to be 1 minute apart from a succesful RDP connection. Good effort but eh, we need to narrow down that to the one who took place in a RDP session.
+
+RDP sessions can identified looking at the `LogonType` of the event ID `4624`. And this is a quick way to build a mapping in case you don't remember what are the possible values:
+
+```kql
+SecurityEvent
+| where TimeGenerated > ago(14d)
+| where EventID == 4624
+| distinct LogonType, LogonTypeName
+```
+
+Let's explore the data:
+
+```kql
+SecurityEvent
+| where TimeGenerated > ago(1d)
+| where LogonType == 10
+```
+
+There seem to be a lot of duplicate. To keep unique logons we are going to filter out empty (LogonGuid)[https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4624].
+We need `LogonType == 10`. Let's identify the session and then map them to our process sets as long as the last process execution time is within 1 minute of the session start time.
+
+```kql
+let LOLList = dynamic(["ipconfig.exe","whoami.exe","winrs.exe"]);
+SecurityEvent
+| where TimeGenerated > ago(1d)
+| where EventID == 4688
+| where AccountType != "Machine"
+| where Process in (LOLList)
+| summarize ProcessSet = make_set(tolower(Process)), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by bin(TimeGenerated, 1m), Computer, SubjectAccount
+| order by TimeGenerated asc
+| serialize 
+| extend NewProcessSet = array_concat(ProcessSet, prev(ProcessSet))
+| where array_length(set_difference(LOLList, NewProcessSet)) == 0
+| where LastSeen - FirstSeen <= 1m
+| project TimeGenerated, Computer, SubjectAccount, NewProcessSet, FirstSeen, LastSeen
+| join kind=leftouter (
+    SecurityEvent
+    | where TimeGenerated > ago(1d)
+    | where LogonType == 10
+    | where LogonGuid != "00000000-0000-0000-0000-000000000000"
+    | project SessionStartTime = TimeGenerated, Computer, TargetAccount
+) on Computer, $left.SubjectAccount == $right.TargetAccount
+| where LastSeen - SessionStartTime <= 1m
+| project Computer, SessionStartTime, NewProcessSet, SubjectAccount, FirstSeen, LastSeen
+```
+
+Our right table is smaller than our left we should really switch it... I let you do that :)
+
+
+
+
+
