@@ -139,7 +139,7 @@ SecurityEvent
 | where LogonType == 10
 ```
 
-There seem to be a lot of duplicate. To keep unique logons we are going to filter out empty (LogonGuid)[https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4624].
+There seem to be a lot of duplicate. To keep unique logons we are going to filter out empty [LogonGuid](https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4624).
 We need `LogonType == 10`. Let's identify the session and then map them to our process sets as long as the last process execution time is within 1 minute of the session start time.
 
 ```kql
