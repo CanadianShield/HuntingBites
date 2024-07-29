@@ -42,7 +42,7 @@ SecurityEvent
 | where Process in (LOLList)
 ```
 
-Of course this only gives us if the prcesses where used. Not that there were used within 1 minute. For that we will need to bundle them in bucket of 1 minute.
+Of course this only gives us if the processes were created. Not that there were used within 1 minute. For that we will need to bundle them in bucket of 1 minute.
 
 ```kql
 let LOLList = dynamic(["ipconfig.exe","whoami.exe","winrs.exe"]);
@@ -54,6 +54,68 @@ SecurityEvent
 | summarize ProcessSet = make_set(tolower(Process)) by bin(TimeGenerated, 1m), Computer, SubjectAccount
 ```
 
-Now we can ask for buckets of ProcesSet that matches our variable `LOLList`.
+🔗 [make_set documentation](https://learn.microsoft.com/en-us/azure/data-explorer/kusto/query/make-set-aggregation-function)
 
-The problem with that approach is that it doesn't really tell us what we have
+Now we can ask for buckets of ProcesSet that matches our variable `LOLList`. At this point there are different ways to check if we have a match between `ProcessSet` and `LOLList`. The easiest way would be to check the number of items. As make_set only keep unique values, if the number of values in it is the same as the number of value in `LOLList` then we know it's a match. A fancier way to do it is to check if all `LOLList` items exist in the set. It's more practical in case the the second array could contain something more. Let say that `PorcessSet` has all the process, not only the one that are in `LOLList`. Then this fancier method woudl just work regardless.
+
+🔗 [set_difference documentation](https://learn.microsoft.com/en-us/azure/data-explorer/kusto/query/set-difference-function)
+
+Note that the order matter, we need `LOLList` as a first argument.
+
+```kql
+let LOLList = dynamic(["ipconfig.exe","whoami.exe","winrs.exe"]);
+SecurityEvent
+| where TimeGenerated > ago(1d)
+| where EventID == 4688
+| where AccountType != "Machine"
+| where Process in (LOLList)
+| summarize ProcessSet = make_set(tolower(Process)) by bin(TimeGenerated, 1m), Computer, SubjectAccount
+| where array_length(set_difference(LOLList, ProcessSet)) == 0
+```
+
+The problem with that approach is that it doesn't really tell us what we have all the processes running within 1 minute it tells us that we have them in arbitrary buckets of 1 minute. And the bucket has different start and end times depending on when it is ran as the time limit in this query is based on `ago()` which is contextual of the exeution time of the query.
+
+```kql
+print ago(1d)
+// make a note of the output
+// wait 5 second and run it again
+```
+
+So, we could have let say process 1 and 2 in at the end of one bucket and process 3 at the beggining of a second bucket. They are still within one minute appart but in two buckets. One way to deal with that is to look at the bucket and the one before the current one:
+
+```kql
+let LOLList = dynamic(["ipconfig.exe","whoami.exe","winrs.exe"]);
+SecurityEvent
+| where TimeGenerated > ago(1d)
+| where EventID == 4688
+| where AccountType != "Machine"
+| where Process in (LOLList)
+| summarize ProcessSet = make_set(tolower(Process)) by bin(TimeGenerated, 1m), Computer, SubjectAccount
+| order by TimeGenerated asc
+| serialize 
+| extend NewProcessSet = array_concat(ProcessSet, prev(ProcessSet))
+| where array_length(set_difference(LOLList, NewProcessSet)) == 0
+| project TimeGenerated, Computer, SubjectAccount, NewProcessSet
+```
+
+🔗 [serialize documentation](https://learn.microsoft.com/en-us/azure/data-explorer/kusto/query/serialize-operator)
+
+Great! But it doesn't actually do exactly what we need. As in fact, we are now looking at buckets of 2 minutes. Which is probably fine, but what if we reallu want all the stuf to be 1 minute appart. We will need to bring the first process match and the last process match in our aggregation.
+
+```kql
+let LOLList = dynamic(["ipconfig.exe","whoami.exe","winrs.exe"]);
+SecurityEvent
+| where TimeGenerated > ago(1d)
+| where EventID == 4688
+| where AccountType != "Machine"
+| where Process in (LOLList)
+| summarize ProcessSet = make_set(tolower(Process)), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by bin(TimeGenerated, 1m), Computer, SubjectAccount
+| order by TimeGenerated asc
+| serialize 
+| extend NewProcessSet = array_concat(ProcessSet, prev(ProcessSet))
+| where array_length(set_difference(LOLList, NewProcessSet)) == 0
+| where LastSeen - FirstSeen <= 1m
+| project TimeGenerated, Computer, SubjectAccount, NewProcessSet
+```
+
+We are getting somewhere. But wouldn't be a more elegant way of doing that? Plenty! Like using [scan](https://learn.microsoft.com/en-us/azure/data-explorer/kusto/query/scan-operator) or (row_window_session%29))[https://learn.microsoft.com/en-us/azure/data-explorer/kusto/query/row-window-session-function]
