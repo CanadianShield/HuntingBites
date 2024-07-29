@@ -118,7 +118,7 @@ SecurityEvent
 | project TimeGenerated, Computer, SubjectAccount, NewProcessSet
 ```
 
-We are getting somewhere. But wouldn't be a more elegant way of doing that? Plenty! Like using [scan](https://learn.microsoft.com/en-us/azure/data-explorer/kusto/query/scan-operator) or (row_window_session)[https://learn.microsoft.com/en-us/azure/data-explorer/kusto/query/row-window-session-function] (which is kinda what we have done, but in a native and much shorter way). But we'll explore that in a another episode...
+We are getting somewhere. But wouldn't be a more elegant way of doing that? Plenty! Like using [scan](https://learn.microsoft.com/en-us/azure/data-explorer/kusto/query/scan-operator) or [row_window_session()](https://learn.microsoft.com/en-us/azure/data-explorer/kusto/query/row-window-session-function) (which is kinda what we have done, but in a native and much shorter way). But we'll explore that in a another episode...
 
 Now, we need something else here. We didn't really need those processes to be 1 minute apart of each other. They needed to be 1 minute apart from a succesful RDP connection. Good effort but eh, we need to narrow down that to the one who took place in a RDP session.
 
