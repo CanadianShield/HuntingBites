@@ -81,7 +81,7 @@ print ago(1d)
 // wait 5 second and run it again
 ```
 
-So, we could have let say process 1 and 2 in at the end of one bucket and process 3 at the beggining of a second bucket. They are still within one minute appart but in two buckets. One way to deal with that is to look at the bucket and the one before the current one:
+So, we could have let say process 1 and 2 in at the end of one bucket and process 3 at the beggining of a second bucket. They are still within one minute appart but in two buckets. One way to deal with that is to look at the bucket and the one before the current one with [prev()](https://learn.microsoft.com/en-us/azure/data-explorer/kusto/query/prev-function):
 
 ```kql
 let LOLList = dynamic(["ipconfig.exe","whoami.exe","winrs.exe"]);
