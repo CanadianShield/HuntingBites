@@ -44,7 +44,7 @@ SigninLogs
 
 Let's union the two and use partition to just display 2 record max per query to ensure everything works fine. 
 
-🔗 (partition documentation)[https://learn.microsoft.com/en-us/kusto/query/partition-operator]
+🔗 [partition documentation](https://learn.microsoft.com/en-us/kusto/query/partition-operator)
 
 ```kql
 union (AuditLogs
@@ -65,7 +65,7 @@ SigninLogs
 Note that we use `hint.strategy=native` as it is very likely that we go above the default legacy strategy limit.   
 Let's put that together ordered by TimeGenerated and use scan to perfom a subquery for each record and try to identify a sequence. 
 
-🔗 (scan documentation)[https://learn.microsoft.com/en-us/kusto/query/scan-operator]
+🔗 [scan documentation](https://learn.microsoft.com/en-us/kusto/query/scan-operator)
 
 ```kql
 union (AuditLogs
@@ -101,7 +101,7 @@ OfficeActivity
 | project TimeGenerated, UserPrincipalName = tolower(UserId), OperationName = Operation, IPAddress = tostring(split(ClientIP, ":")[0]), ForwardingSmtpAddress
 ```
 
-🔗 (mv-apply documentation)[https://learn.microsoft.com/en-us/kusto/query/mv-apply-operator]
+🔗 [mv-apply documentation](https://learn.microsoft.com/en-us/kusto/query/mv-apply-operator)
 
 Let put that together:
 
