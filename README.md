@@ -4,5 +4,7 @@ If you stumble upon this by chance and don't understand what it's about, reach o
 
 1️⃣ [New beginnings](/01-NewBeginnings.md)    
 2️⃣ [Weird beginnings](/02-WeirdBeginnings.md)    
-3️⃣ [Yellow snowball effect](/03-YellowSnowballEffect.md)
+3️⃣ [Yellow snowball effect](/03-YellowSnowballEffect.md)    
 4️⃣ [Broken branches](/04-BrokenBranches.md) (to be released soon)
+
+Just rambling... It might only make sense if you have access to the actual dataset used for the scenarios. Scalabity might also be an issue. So sharpen your filters! 
