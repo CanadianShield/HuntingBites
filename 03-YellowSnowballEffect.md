@@ -7,11 +7,15 @@
 
 ⏭️ Next: use the same logic to add addition post compromise steps (such as adding a mailbox redirection rule)
 
+First let's see what's the audit record when user update their MFA methods. Too lazy to check the documentation, so let's check directly in the AuditLogs table:
+
 ```kql
 AuditLogs
 | where TimeGenerated > ago(14d)
 | where *  contains "security info"
 ```
+
+Ok now we see clearer let's fine tune the filter.
 
 ```kql
 AuditLogs
@@ -21,11 +25,15 @@ AuditLogs
 | project TimeGenerated, OperationName, ResultDescription, UserPrincipalName = tostring(TargetResources[0].userPrincipalName), IPAddress = tostring(InitiatedBy.user.ipAddress), Result
 ```
 
+What about suspicious signins? Let's focus on the [Unfamilliar signin properties](https://learn.microsoft.com/en-us/entra/id-protection/concept-identity-protection-risks#unfamiliar-sign-in-properties) detection in Identity Protection. 
+
 ```kql
 SigninLogs
 | where TimeGenerated > ago(14d)
 | where * contains "unfamiliarFeatures"
 ```
+
+Now with a proper filter:
 
 ```kql
 SigninLogs
@@ -33,6 +41,10 @@ SigninLogs
 | where RiskEventTypes has_any ("unfamiliarFeatures") and RiskDetail == "userPassedMFADrivenByRiskBasedPolicy"
 | project TimeGenerated, OperationName, UserPrincipalName, AppDisplayName, IPAddress, ResultType
 ```
+
+Let's union the two and use partition to just display 2 record max per query to ensure everything works fine. 
+
+🔗 (partition documentation)[https://learn.microsoft.com/en-us/kusto/query/partition-operator]
 
 ```kql
 union (AuditLogs
@@ -49,6 +61,11 @@ SigninLogs
   limit 2
 )
 ```
+
+Note that we use `hint.strategy=native` as it is very likely that we go above the default legacy strategy limit.   
+Let's put that together ordered by TimeGenerated and use scan to perfom a subquery for each record and try to identify a sequence. 
+
+🔗 (scan documentation)[https://learn.microsoft.com/en-us/kusto/query/scan-operator]
 
 ```kql
 union (AuditLogs
@@ -71,6 +88,8 @@ SigninLogs
 )
 ```
 
+Great! Well, we could have done that with a simple left outer join... But scan has its value when we want to identify more steps... Let's add to the mix another step. Let's say a user adding a mailbox redirection rule within the first 15 minutes of the suspicious signin. First we'll need a query to list all redirection rules:
+
 ```kql
 OfficeActivity
 | where TimeGenerated > ago(14d)
@@ -81,6 +100,10 @@ OfficeActivity
 )
 | project TimeGenerated, UserPrincipalName = tolower(UserId), OperationName = Operation, IPAddress = tostring(split(ClientIP, ":")[0]), ForwardingSmtpAddress
 ```
+
+🔗 (mv-apply documentation)[https://learn.microsoft.com/en-us/kusto/query/mv-apply-operator]
+
+Let put that together:
 
 ```kql
 union (AuditLogs
@@ -112,7 +135,7 @@ OfficeActivity
     )
 )
 ```
-
+Here we have it. It will return the Set-Mailbox operation perform after a suspicious signin and an MFA registration. Let's add some new columns for clarity using the `declare` parameter in `scan`:
 
 ```kql
 union (AuditLogs
@@ -145,3 +168,5 @@ OfficeActivity
 )
 | project-reorder SuspiciousLogonTime, SuspiciousMFARegistration
 ```
+
+Tada! 🎉 
